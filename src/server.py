@@ -18,14 +18,21 @@ DEFAULT_PROJECT_ID = os.environ.get("GOOGLE_PROJECT_ID", "insightsprod")
 # Add BigQuery execution tool
 @mcp.tool()
 def execute_bigquery(query: str, service_account_path: str = DEFAULT_SERVICE_ACCOUNT_PATH) -> dict:
-    """Execute a BigQuery SQL query and return the results.
+    """Execute a custom BigQuery SQL query and return the results as structured data.
+
+    This tool allows you to run arbitrary SQL queries against Google BigQuery. It handles
+    authentication, execution, and result formatting, returning data in a consistent structure
+    for further processing.
 
     Args:
-        query: SQL query to execute
-        service_account_path: (Optional) Optional path to service account JSON credentials file
+        query: The SQL query to execute (required).
+               Example: "SELECT * FROM `project.dataset.table` LIMIT 10"
+        service_account_path: (Optional) Path to Google Cloud service account JSON credentials file.
+                              If not provided, uses default application credentials.
+                              Example: '/path/to/service-account.json'
 
     Returns:
-        Dictionary containing query results or error information
+        The result of the query execution in a structured format.
     """
     try:
         # Initialize the BigQuery client with the specified project and credentials if provided
@@ -75,16 +82,25 @@ def get_client_details(
     client_name: str = "",
     service_account_path: None = DEFAULT_SERVICE_ACCOUNT_PATH,
 ) -> dict:
-    """Retrieve Pulse client details from the data warehouse. It will return the most recent client details.
-    This includes the client_id, client_name, sources (platforms enabled), and git_url.
+    """Retrieve detailed information about Pulse clients from the data warehouse.
+
+    This tool fetches the most recent client metadata from the data warehouse, including
+    client identification, enabled data sources (platforms), and repository information.
+    You can search by either client ID or client name.
 
     Args:
-        client_id: (Optional) Specific client ID to filter by
-        client_name: (Optional) Client name to search for (uses LIKE operator for partial matches)
-        service_account_path: (Optional) Path to service account JSON credentials file
+        client_id: (Optional) Specific client ID to filter by. Used for exact matching.
+                  Example: "123" or "456"
+        client_name: (Optional) Client name to search for. Uses partial matching (LIKE operator).
+                    Example: "Acme" will match "Acme Corp", "Acme Inc", etc.
+        service_account_path: (Optional) Path to Google Cloud service account JSON credentials file.
+                              If not provided, uses default application credentials.
+                              Example: '/path/to/service-account.json'
 
     Returns:
-        Dictionary containing client details including updated_at, client_id, client_name, sources, and git_url
+        The result of the query execution in a structured format.
+
+    Note: At least one of client_id or client_name must be provided.
     """
     try:
         # Initialize the BigQuery client with the specified project and credentials if provided
@@ -184,16 +200,26 @@ def get_client_datasets(
     client_name: str = "",
     service_account_path: None = DEFAULT_SERVICE_ACCOUNT_PATH,
 ) -> dict:
-    """Retrieve Pulse client datasets from the data warehouse. Dataset names are found from the INFORMATION_SCHEMA
-    tables.
+    """Find all BigQuery datasets associated with a specific Pulse client.
+
+    This tool searches for datasets that belong to a particular client by matching
+    either client ID or client name in the dataset names. It uses the BigQuery
+    INFORMATION_SCHEMA.SCHEMATA view to get comprehensive metadata about each dataset.
 
     Args:
-        client_id: (Optional) Specific client ID to filter by
-        client_name: (Optional) Client name to search for (uses LIKE operator for partial matches)
-        service_account_path: (Optional) Path to service account JSON credentials file
+        client_id: (Optional) Specific client ID to filter datasets by. The client ID will be matched
+                  against dataset names using a LIKE operator (partial matching).
+                  Example: "123" will match datasets containing "123" in their names
+        client_name: (Optional) Client name to search for in dataset names. Uses partial matching (LIKE operator).
+                    Example: "Acme" will match datasets containing "Acme" in their names
+        service_account_path: (Optional) Path to Google Cloud service account JSON credentials file.
+                              If not provided, uses default application credentials.
+                              Example: '/path/to/service-account.json'
 
     Returns:
-        Dictionary containing dataset information or error details
+        A dictionary containing the list of datasets and their metadata.
+
+    Note: Either client_id or client_name must be provided, or a ValueError will be raised.
     """
     try:
         # Initialize the BigQuery client with the specified project and credentials if provided
@@ -268,15 +294,24 @@ def get_dataset_tables(
     project_id: str = DEFAULT_PROJECT_ID,
     service_account_path: None = DEFAULT_SERVICE_ACCOUNT_PATH,
 ) -> dict:
-    """Retrieve a list of tables in a specific BigQuery dataset using INFORMATION_SCHEMA views.
+    """Retrieve a comprehensive list of all tables in a specific BigQuery dataset with their metadata.
+
+    This tool queries the BigQuery INFORMATION_SCHEMA.TABLES view to get detailed information
+    about each table in the provided dataset. The results include table names, types,
+    creation times, and other metadata that can help you understand the dataset structure.
 
     Args:
-        dataset_id: The dataset ID to list tables from
-        project_id: (Optional) The project ID where the dataset resides
-        service_account_path: (Optional) Path to service account JSON credentials file
+        dataset_id: The ID of the BigQuery dataset to list tables from (required).
+            Example: 'my_dataset' or 'client_123_data'
+        project_id: (Optional) The Google Cloud project ID where the dataset resides.
+            If not provided, uses the default project from environment variables.
+            Example: 'my-project' or 'analytics-prod'
+        service_account_path: (Optional) Path to Google Cloud service account JSON credentials file.
+            If not provided, uses default application credentials.
+            Example: '/path/to/service-account.json'
 
     Returns:
-        Dictionary containing the list of tables and their metadata or error details
+        A dictionary containing the list of tables and their metadata.
     """
     try:
         # Initialize the BigQuery client with the specified project and credentials if provided
@@ -297,7 +332,10 @@ def get_dataset_tables(
           table_schema,
           table_name,
           table_type,
-          creation_time
+          is_insertable_into,
+          is_typed,
+          creation_time,
+          ddl
         FROM
           `{project_id}.{dataset_id}.INFORMATION_SCHEMA.TABLES`
         ORDER BY
