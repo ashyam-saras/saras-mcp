@@ -260,3 +260,74 @@ def get_client_datasets(
     except Exception as e:
         # Handle any other unexpected errors
         return {"success": False, "error": "Execution Error", "message": str(e), "code": 500}
+
+
+@mcp.tool()
+def get_dataset_tables(
+    dataset_id: str,
+    project_id: str = DEFAULT_PROJECT_ID,
+    service_account_path: None = DEFAULT_SERVICE_ACCOUNT_PATH,
+) -> dict:
+    """Retrieve a list of tables in a specific BigQuery dataset using INFORMATION_SCHEMA views.
+
+    Args:
+        dataset_id: The dataset ID to list tables from
+        project_id: (Optional) The project ID where the dataset resides
+        service_account_path: (Optional) Path to service account JSON credentials file
+
+    Returns:
+        Dictionary containing the list of tables and their metadata or error details
+    """
+    try:
+        # Initialize the BigQuery client with the specified project and credentials if provided
+        if service_account_path:
+            # Load credentials from the service account file
+            credentials = service_account.Credentials.from_service_account_file(
+                service_account_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            client = bigquery.Client(project=project_id, credentials=credentials)
+        else:
+            client = bigquery.Client(project=project_id)
+
+        # Query to get tables from INFORMATION_SCHEMA
+        query = f"""
+        SELECT
+          table_catalog,
+          table_schema,
+          table_name,
+          table_type,
+          creation_time
+        FROM
+          `{project_id}.{dataset_id}.INFORMATION_SCHEMA.TABLES`
+        ORDER BY
+          table_name
+        """
+
+        # Execute the query
+        query_job = client.query(query, project=project_id)
+
+        # Get the results
+        results = query_job.result()
+
+        # Convert results to a list of dictionaries
+        tables_list = [dict(row) for row in results]
+
+        return {"success": True, "results": tables_list}
+
+    except NotFound as e:
+        # Handle the case where dataset is not found
+        return {
+            "success": False,
+            "error": "Not Found",
+            "message": f"Dataset '{dataset_id}' not found: {str(e)}",
+            "code": 404,
+        }
+
+    except GoogleAPIError as e:
+        # Handle other Google API errors
+        return {"success": False, "error": "Google API Error", "message": str(e), "code": getattr(e, "code", 500)}
+
+    except Exception as e:
+        # Handle any other unexpected errors
+        return {"success": False, "error": "Execution Error", "message": str(e), "code": 500}
