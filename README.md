@@ -13,6 +13,7 @@ pulse-backend-mcp/
 ├── README.md                 # Project documentation
 ├── pyproject.toml            # Python project configuration
 ├── uv.lock                   # Dependency lock file
+├── .env                      # Environment variables (create this file)
 └── src/                      # Source code directory
     └── server.py             # Main MCP server implementation
 ```
@@ -49,6 +50,7 @@ MCP follows a client-server architecture:
 - Python 3.13 or higher
 - Google Cloud account with BigQuery access
 - Service account credentials with appropriate permissions
+- ClickUp API key (for task integration)
 
 ## Installation
 
@@ -78,7 +80,14 @@ MCP follows a client-server architecture:
      ```
    - Passing the service account path directly to the tools when calling them
 
-2. (Optional) Adjust the default project ID in the tool definitions if needed
+2. Create a `.env` file in the root directory with the following variables:
+   ```
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+   GOOGLE_PROJECT_ID=your-project-id
+   CLICKUP_API_KEY=your-clickup-api-key
+   ```
+
+3. (Optional) Adjust the default project ID in the tool definitions if needed
 
 ## Usage
 
@@ -140,6 +149,33 @@ Retrieve available datasets for a specific client.
 **Tool Annotations:**
 - Read-only: Yes (doesn't modify data)
 - Open World: No (operates on internal data warehouse)
+
+### 4. get_dataset_tables
+
+List all tables in a specific BigQuery dataset with their metadata.
+
+**Parameters:**
+- `dataset_id` (string, required): The ID of the BigQuery dataset to list tables from
+- `project_id` (string, optional): Google Cloud project ID (default: from environment)
+- `service_account_path` (string, optional): Path to service account JSON credentials
+
+**Tool Annotations:**
+- Read-only: Yes (doesn't modify data)
+- Open World: No (operates on internal data warehouse)
+
+### 5. get_clickup_task
+
+Retrieve detailed information about a specific ClickUp task.
+
+**Parameters:**
+- `task_id` (string, required): The unique identifier of the ClickUp task
+- `api_key` (string, optional): ClickUp API key for authentication (default: from environment)
+- `include_subtasks` (boolean, optional): Whether to include subtask information
+- `include_comments` (boolean, optional): Whether to include task comments
+
+**Tool Annotations:**
+- Read-only: Yes (doesn't modify data)
+- Open World: Yes (interacts with external ClickUp API)
 
 ## Extending the Server
 
