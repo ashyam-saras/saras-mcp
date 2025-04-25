@@ -2,37 +2,39 @@
 
 import os  # Import os module for environment variables
 
+import requests  # Import requests for HTTP calls
+from dotenv import load_dotenv
 from google.api_core.exceptions import GoogleAPIError, NotFound
 from google.cloud import bigquery  # Import BigQuery client
 from google.oauth2 import service_account
 from mcp.server.fastmcp import FastMCP
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Create an MCP server
 mcp = FastMCP("bigquery")
 
 # Get service account path from environment variable if available
 DEFAULT_SERVICE_ACCOUNT_PATH = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-DEFAULT_PROJECT_ID = os.environ.get("GOOGLE_PROJECT_ID", "insightsprod")
+DEFAULT_PROJECT_ID = os.environ.get("GOOGLE_PROJECT_ID")
+DEFAULT_CLICKUP_API_KEY = os.environ.get("DEFAULT_CLICKUP_API_KEY")
 
 
 # Add BigQuery execution tool
 @mcp.tool()
 def execute_bigquery(query: str, service_account_path: str = DEFAULT_SERVICE_ACCOUNT_PATH) -> dict:
-    """Execute a custom BigQuery SQL query and return the results as structured data.
+    """Execute a custom BigQuery SQL query and return the results.
 
-    This tool allows you to run arbitrary SQL queries against Google BigQuery. It handles
-    authentication, execution, and result formatting, returning data in a consistent structure
-    for further processing.
+    Runs SQL queries against Google BigQuery, handling authentication and formatting
+    results for easier processing.
 
     Args:
-        query: The SQL query to execute (required).
-               Example: "SELECT * FROM `project.dataset.table` LIMIT 10"
-        service_account_path: (Optional) Path to Google Cloud service account JSON credentials file.
-                              If not provided, uses default application credentials.
-                              Example: '/path/to/service-account.json'
+        query: The SQL query to execute.
+        service_account_path: (Optional) Path to Google Cloud service account JSON.
 
     Returns:
-        The result of the query execution in a structured format.
+        A dictionary with query results or error information.
     """
     try:
         # Initialize the BigQuery client with the specified project and credentials if provided
@@ -84,21 +86,16 @@ def get_client_details(
 ) -> dict:
     """Retrieve detailed information about Pulse clients from the data warehouse.
 
-    This tool fetches the most recent client metadata from the data warehouse, including
-    client identification, enabled data sources (platforms), and repository information.
-    You can search by either client ID or client name.
+    Fetches client metadata including identifiers, enabled data sources, and
+    repository information. You can search by either client ID or client name.
 
     Args:
-        client_id: (Optional) Specific client ID to filter by. Used for exact matching.
-                  Example: "123" or "456"
-        client_name: (Optional) Client name to search for. Uses partial matching (LIKE operator).
-                    Example: "Acme" will match "Acme Corp", "Acme Inc", etc.
-        service_account_path: (Optional) Path to Google Cloud service account JSON credentials file.
-                              If not provided, uses default application credentials.
-                              Example: '/path/to/service-account.json'
+        client_id: (Optional) Specific client ID to filter by.
+        client_name: (Optional) Client name to search for (uses partial matching).
+        service_account_path: (Optional) Path to Google Cloud service account JSON.
 
     Returns:
-        The result of the query execution in a structured format.
+        A dictionary with client information or error details.
 
     Note: At least one of client_id or client_name must be provided.
     """
@@ -200,26 +197,20 @@ def get_client_datasets(
     client_name: str = "",
     service_account_path: None = DEFAULT_SERVICE_ACCOUNT_PATH,
 ) -> dict:
-    """Find all BigQuery datasets associated with a specific Pulse client.
+    """Find BigQuery datasets associated with a specific Pulse client.
 
-    This tool searches for datasets that belong to a particular client by matching
-    either client ID or client name in the dataset names. It uses the BigQuery
-    INFORMATION_SCHEMA.SCHEMATA view to get comprehensive metadata about each dataset.
+    Searches for datasets matching a client ID or name in the dataset names using
+    the BigQuery INFORMATION_SCHEMA.SCHEMATA view.
 
     Args:
-        client_id: (Optional) Specific client ID to filter datasets by. The client ID will be matched
-                  against dataset names using a LIKE operator (partial matching).
-                  Example: "123" will match datasets containing "123" in their names
-        client_name: (Optional) Client name to search for in dataset names. Uses partial matching (LIKE operator).
-                    Example: "Acme" will match datasets containing "Acme" in their names
-        service_account_path: (Optional) Path to Google Cloud service account JSON credentials file.
-                              If not provided, uses default application credentials.
-                              Example: '/path/to/service-account.json'
+        client_id: (Optional) Client ID to filter datasets by (partial matching).
+        client_name: (Optional) Client name to search for (partial matching).
+        service_account_path: (Optional) Path to Google Cloud service account JSON.
 
     Returns:
-        A dictionary containing the list of datasets and their metadata.
+        A dictionary with datasets information or error details.
 
-    Note: Either client_id or client_name must be provided, or a ValueError will be raised.
+    Note: Either client_id or client_name must be provided.
     """
     try:
         # Initialize the BigQuery client with the specified project and credentials if provided
@@ -294,24 +285,18 @@ def get_dataset_tables(
     project_id: str = DEFAULT_PROJECT_ID,
     service_account_path: None = DEFAULT_SERVICE_ACCOUNT_PATH,
 ) -> dict:
-    """Retrieve a comprehensive list of all tables in a specific BigQuery dataset with their metadata.
+    """List all tables in a specific BigQuery dataset with their metadata.
 
-    This tool queries the BigQuery INFORMATION_SCHEMA.TABLES view to get detailed information
-    about each table in the provided dataset. The results include table names, types,
-    creation times, and other metadata that can help you understand the dataset structure.
+    Queries the INFORMATION_SCHEMA.TABLES view to get information about each table
+    in the dataset, including names, types, creation times, and other metadata.
 
     Args:
-        dataset_id: The ID of the BigQuery dataset to list tables from (required).
-            Example: 'my_dataset' or 'client_123_data'
+        dataset_id: The ID of the BigQuery dataset to list tables from.
         project_id: (Optional) The Google Cloud project ID where the dataset resides.
-            If not provided, uses the default project from environment variables.
-            Example: 'my-project' or 'analytics-prod'
-        service_account_path: (Optional) Path to Google Cloud service account JSON credentials file.
-            If not provided, uses default application credentials.
-            Example: '/path/to/service-account.json'
+        service_account_path: (Optional) Path to Google Cloud service account JSON.
 
     Returns:
-        A dictionary containing the list of tables and their metadata.
+        A dictionary with tables information or error details.
     """
     try:
         # Initialize the BigQuery client with the specified project and credentials if provided
@@ -365,6 +350,105 @@ def get_dataset_tables(
     except GoogleAPIError as e:
         # Handle other Google API errors
         return {"success": False, "error": "Google API Error", "message": str(e), "code": getattr(e, "code", 500)}
+
+    except Exception as e:
+        # Handle any other unexpected errors
+        return {"success": False, "error": "Execution Error", "message": str(e), "code": 500}
+
+
+@mcp.tool()
+def get_clickup_task(
+    task_id: str,
+    api_key: str = DEFAULT_CLICKUP_API_KEY,
+    include_subtasks: bool = False,
+    include_comments: bool = False,
+) -> dict:
+    """Retrieve detailed information about a specific ClickUp task.
+
+    Fetches task data including status, assignees, description, custom fields,
+    and tags from the ClickUp API. Can optionally include subtasks and comments.
+
+    Args:
+        task_id: The unique identifier of the ClickUp task.
+        api_key: (Optional) ClickUp API key for authentication.
+        include_subtasks: (Optional) Whether to include subtask information.
+        include_comments: (Optional) Whether to include task comments.
+
+    Returns:
+        A dictionary with task data or error information.
+
+    API Reference: https://developer.clickup.com/reference/gettask
+    """
+    try:
+        # Build the base URL for the ClickUp API request
+        base_url = f"https://api.clickup.com/api/v2/task/{task_id}"
+
+        # Add query parameters for optional data
+        params = {}
+        if include_subtasks:
+            params["include_subtasks"] = "true"
+
+        # Set up headers with API key authorization
+        headers = {"Authorization": api_key, "Content-Type": "application/json"}
+
+        # Make the API request to get task details
+        response = requests.get(base_url, headers=headers, params=params)
+
+        # Check if the response is successful
+        response.raise_for_status()
+
+        # Parse the JSON response
+        task_data = response.json()
+
+        # If comments are requested and not already included, get them in a separate request
+        if include_comments and "comments" not in task_data:
+            comments_url = f"https://api.clickup.com/api/v2/task/{task_id}/comment"
+            comments_response = requests.get(comments_url, headers=headers)
+
+            if comments_response.status_code == 200:
+                comments_data = comments_response.json()
+                task_data["comments"] = comments_data.get("comments", [])
+
+        return {"success": True, "result": task_data}
+
+    except requests.exceptions.HTTPError as e:
+        # Handle HTTP errors with appropriate status codes
+        status_code = e.response.status_code
+        error_message = str(e)
+
+        # Try to get more detailed error message from the response if possible
+        try:
+            error_data = e.response.json()
+            if "err" in error_data:
+                error_message = error_data["err"]
+        except:
+            pass
+
+        if status_code == 401:
+            return {
+                "success": False,
+                "error": "Authentication Error",
+                "message": "Invalid API key or unauthorized access",
+                "code": 401,
+            }
+        elif status_code == 404:
+            return {
+                "success": False,
+                "error": "Not Found",
+                "message": f"Task with ID '{task_id}' not found",
+                "code": 404,
+            }
+        else:
+            return {"success": False, "error": "ClickUp API Error", "message": error_message, "code": status_code}
+
+    except requests.exceptions.ConnectionError:
+        # Handle connection errors (network issues, DNS failure, etc.)
+        return {
+            "success": False,
+            "error": "Connection Error",
+            "message": "Failed to connect to the ClickUp API. Please check your internet connection.",
+            "code": 503,
+        }
 
     except Exception as e:
         # Handle any other unexpected errors
